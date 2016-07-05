@@ -1,0 +1,132 @@
+buildscript {
+    repositories {
+        mavenCentral()
+        jcenter()
+    }
+    dependencies {
+        classpath 'com.android.tools.build:gradle:2.1.0'
+    }
+}
+
+allprojects {
+    repositories {
+        mavenLocal()
+        mavenCentral()
+        jcenter()
+    }
+}
+
+apply plugin: 'com.android.library'
+
+version = "2.0.0-SNAPSHOT"
+
+android {
+    compileSdkVersion 23
+    buildToolsVersion "23.0.3"
+
+    defaultConfig {
+        minSdkVersion 14
+        targetSdkVersion 23
+        versionCode 1
+        versionName "${project.version}"
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+    }
+
+    sourceSets {
+        main {
+            java {
+                exclude '**/example/**'
+            }
+        }
+    }
+}
+
+dependencies {
+    testCompile 'junit:junit:4.8.1'
+    provided 'com.google.firebase:firebase-core:9.2.0'
+    provided "com.google.firebase:firebase-database:9.2.0"
+}
+
+apply plugin: 'maven-publish'
+
+publishing {
+    publications {
+        "${rootProject.name}"(MavenPublication) {
+            groupId "com.firebase"
+            version project.version
+            artifactId rootProject.name
+
+            artifact("$buildDir/outputs/aar/${project.name}-release.aar")
+            artifact("$buildDir/outputs/aar/${project.name}-release.aar.asc") {
+                classifier = null
+                extension = 'aar.asc'
+            }
+
+            // include dependencies
+            pom.withXml {
+                asNode().appendNode('name', "${rootProject.name}")
+                asNode().appendNode('description', 'GeoFire is an open-source library for Android/Java that allows you to store and query a set of keys based on their geographic location.')
+                asNode().appendNode('url', 'https://github.com/firebase/geofire-java')
+
+                def license = asNode().appendNode('licenses').appendNode('license')
+                license.appendNode('name', 'MIT')
+                license.appendNode('url', 'http://firebase.mit-license.org')
+
+                def dependenciesNode = asNode().appendNode('dependencies')
+                project.configurations.compile.allDependencies.each { dep ->
+                    // fabric returns null for these values, so skip it
+                    if (dep.group?.trim() && dep.name?.trim() && dep.version?.trim()) {
+                        def dependencyNode = dependenciesNode.appendNode('dependency')
+                        dependencyNode.appendNode('groupId', dep.group)
+                        dependencyNode.appendNode('artifactId', dep.name)
+                        dependencyNode.appendNode('version', dep.version)
+
+                        if (dep.group.equals('com.google.firebase')) {
+                            dependencyNode.appendNode('scope', 'provided')
+                        }
+                    }
+                }
+            }
+
+            artifact("$buildDir/publications/${rootProject.name}/${rootProject.name}-${project.version}.pom.asc") {
+                classifier = null
+                extension = 'pom.asc'
+            }
+        }
+    }
+
+    repositories {
+    }
+}
+
+apply plugin: 'signing'
+
+def pgpsigning = System.properties['user.home'] + '/.signing/pgp-signing.gradle';
+if (new File(pgpsigning).exists()) {
+    apply from: pgpsigning
+}
+
+task signPom(type: Sign) {
+    file("$buildDir/publications/${rootProject.name}/pom-default.xml").renameTo(file("$buildDir/publications/${rootProject.name}/${rootProject.name}-${project.version}.pom"))
+    sign file("$buildDir/publications/${rootProject.name}/${rootProject.name}-${project.version}.pom")
+}
+
+task signAar(type: Sign) {
+    sign file("$buildDir/outputs/aar/${project.name}-release.aar")
+}
+
+model {
+    tasks.signPom {
+        dependsOn 'generatePomFileForGeoFirePublication'
+    }
+
+    tasks.signAar {
+        dependsOn 'assembleRelease'
+    }
+}

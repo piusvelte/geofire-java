@@ -1,14 +1,4 @@
-# Mac OS-X
-.DS_STORE
-
-# idea
+/build
+.gradle
 .idea
 *.iml
-*.ipr
-*.iws
-
-# Maven
-target
-
-# Other
-/site/docs
